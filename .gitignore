@@ -1,0 +1,13 @@
+java/.gradle
+clib/build
+
+java/app/build
+java/app/bin
+java/gradle
+java/.project
+java/.settings
+java/app/.classpath
+java/app/.project
+java/gradlew
+java/gradlew.bat
+
