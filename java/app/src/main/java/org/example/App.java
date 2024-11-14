@@ -25,21 +25,22 @@ public class App {
 
   static Function<byte[], String> format = b -> HexFormat.of().formatHex(b);
 
-
   public static void main(String[] args) {
     FNETLib.init("lo");
 
     Stream.generate(FNETLib::recvFrame)
-        // .peek(x -> System.out.println("NEW FRAME\n\n"))
         .map(EthernetFrame::new)
-        .filter(f->f.dstMAC.equals("000000000000"))
+        .filter(f -> f.dstMAC.equals("000000000000"))
         .filter(f -> f.type.equals("0800"))
         .map(IPPackage::new)
-        .filter(p -> !p.type.equals("TCP"))
+        .filter(p -> p.type.equals("UDP"))
+        .peek(System.out::println)
+        .map(UdpPackage::new)
+        .filter(u -> u.dstPort == 43521)
+        .map(UdpPackage::getPayload)
+        .map(String::new)
         .limit(100)
         .forEach(System.out::println);
-    // .map(IPPackage::new)
-    // .forEach(System.out::println);
   }
 
   @ToString
@@ -50,6 +51,7 @@ public class App {
     final byte[] payload;
 
     public EthernetFrame(byte[] frame) {
+
       dstMAC = copyAndToHex(frame, 0, 6);
       srcMAC = copyAndToHex(frame, 6, 12);
       type = copyAndToHex(frame, 12, 14);
@@ -59,24 +61,43 @@ public class App {
 
   @ToString
   @Getter
+  static class UdpPackage {
+    // final String srcMAC, dstMAC, type;
+    final int srcPort, dstPort;
+    @ToString.Exclude
+    final IPPackage ip;
+    @ToString.Exclude
+    final byte[] payload;
+
+    public UdpPackage(IPPackage ip) {
+      this.ip = ip;
+      srcPort = Integer.parseInt(copyAndToHex(ip.payload, 0, 2), 16);
+      dstPort = Integer.parseInt(copyAndToHex(ip.payload, 2, 4), 16);
+      payload = copyOfRange(ip.payload, 8, ip.payload.length);
+    }
+  }
+
+  @ToString
+  @Getter
   static class IPPackage {
     final EthernetFrame eth;
     final String srcIP, dstIP, type;
-    final int ttl;
+    final int ttl, header_length;
 
     @ToString.Exclude
     final byte[] payload;
 
     public IPPackage(EthernetFrame eth) {
-      // System.out.println(format.apply(frame));
       this.eth = eth;
       byte[] frame = eth.payload;
+
+      header_length = 4 * (int) (frame[0] & 0x0F);
       ttl = frame[8];
       type = ip_protocols[frame[9]];
 
       dstIP = getIp(copyOfRange(frame, 12, 16));
       srcIP = getIp(copyOfRange(frame, 16, 20));
-      payload = copyOfRange(frame, 14, frame.length);
+      payload = copyOfRange(frame, header_length, frame.length);
     }
 
     static String getIp(byte[] ip) {
@@ -97,4 +118,5 @@ public class App {
         "SM", "PTP", "FIRE", "CRTP", "CRUDP", "SSCOPMCE", "IPLT", "SPS", "PIPE", "SCTP", "FC", "manet", "HIP", "Shim6",
         "WESP", "ROHC" };
   }
+
 }
