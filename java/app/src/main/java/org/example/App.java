@@ -3,12 +3,98 @@
  */
 package org.example;
 
+import java.util.HexFormat;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
+
+import lombok.Getter;
+import lombok.ToString;
+
+import static java.util.Arrays.*;
+
 public class App {
-    public String getGreeting() {
-        return "Hello World!";
+  public String getGreeting() {
+    return "Hello World!";
+  }
+
+  static String copyAndToHex(byte[] data, int s, int e) {
+
+    return HexFormat.of().formatHex(copyOfRange(data, s, e));
+  }
+
+  static Function<byte[], String> format = b -> HexFormat.of().formatHex(b);
+
+
+  public static void main(String[] args) {
+    FNETLib.init("lo");
+
+    Stream.generate(FNETLib::recvFrame)
+        // .peek(x -> System.out.println("NEW FRAME\n\n"))
+        .map(EthernetFrame::new)
+        .filter(f->f.dstMAC.equals("000000000000"))
+        .filter(f -> f.type.equals("0800"))
+        .map(IPPackage::new)
+        .filter(p -> !p.type.equals("TCP"))
+        .limit(100)
+        .forEach(System.out::println);
+    // .map(IPPackage::new)
+    // .forEach(System.out::println);
+  }
+
+  @ToString
+  @Getter
+  static class EthernetFrame {
+    final String srcMAC, dstMAC, type;
+    @ToString.Exclude
+    final byte[] payload;
+
+    public EthernetFrame(byte[] frame) {
+      dstMAC = copyAndToHex(frame, 0, 6);
+      srcMAC = copyAndToHex(frame, 6, 12);
+      type = copyAndToHex(frame, 12, 14);
+      payload = copyOfRange(frame, 14, frame.length);
+    }
+  }
+
+  @ToString
+  @Getter
+  static class IPPackage {
+    final EthernetFrame eth;
+    final String srcIP, dstIP, type;
+    final int ttl;
+
+    @ToString.Exclude
+    final byte[] payload;
+
+    public IPPackage(EthernetFrame eth) {
+      // System.out.println(format.apply(frame));
+      this.eth = eth;
+      byte[] frame = eth.payload;
+      ttl = frame[8];
+      type = ip_protocols[frame[9]];
+
+      dstIP = getIp(copyOfRange(frame, 12, 16));
+      srcIP = getIp(copyOfRange(frame, 16, 20));
+      payload = copyOfRange(frame, 14, frame.length);
     }
 
-    public static void main(String[] args) {
-        FNETLib.init("lo");
+    static String getIp(byte[] ip) {
+      return String.format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+
     }
+
+    static final String[] ip_protocols = { "HOPOPT", "ICMP", "IGMP", "GGP", "IP-in-IP", "ST", "TCP", "CBT", "EGP",
+        "IGP", "BBN-RCC-MON", "NVP-II", "PUP", "ARGUS", "EMCON", "XNET", "CHAOS", "UDP", "MUX", "DCN-MEAS", "HMP",
+        "PRM", "XNS-IDP", "TRUNK-1", "TRUNK-2", "LEAF-1", "LEAF-2", "RDP", "IRTP", "ISO-TP4", "NETBLT", "MFE-NSP",
+        "MERIT-INP", "DCCP", "3PC", "IDPR", "XTP", "DDP", "IDPR-CMTP", "TP++", "IL", "IPv6", "SDRP", "IPv6-Route",
+        "IPv6-Frag", "IDRP", "RSVP", "GRE", "MHRP", "BNA", "ESP", "AH", "I-NLSP", "SWIPE", "NARP", "MOBILE", "TLSP",
+        "SKIP", "IPv6-ICMP", "IPv6-NoNxt", "IPv6-Opts", "CFTP", "SAT-EXPAK", "KRYPTOLAN", "RVD", "IPPC", "SAT-MON",
+        "VISA", "IPCV", "CPNX", "CPHB", "WSN", "PVP", "BR-SAT-MON", "SUN-ND", "WB-MON", "WB-EXPAK", "ISO-IP", "VMTP",
+        "SECURE-VMTP", "VINES", "TTP", "IPTM", "NSFNET-IGP", "DGP", "TCF", "EIGRP", "OSPF", "Sprite-RPC", "LARP", "MTP",
+        "AX.25", "OS", "MICP", "SCC-SP", "ETHERIP", "ENCAP", "GMTP", "IFMP", "PNNI", "PIM", "ARIS", "SCPS", "A/N",
+        "IPComp", "SNP", "Compaq-Peer", "IPX-in-IP", "VRRP", "PGM", "L2TP", "DDX", "IATP", "STP", "SRP", "UTI", "SMP",
+        "SM", "PTP", "FIRE", "CRTP", "CRUDP", "SSCOPMCE", "IPLT", "SPS", "PIPE", "SCTP", "FC", "manet", "HIP", "Shim6",
+        "WESP", "ROHC" };
+  }
 }

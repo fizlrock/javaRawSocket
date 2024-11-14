@@ -21,15 +21,7 @@
 
 #include <netinet/ether.h> // For Ethernet header
 
-void printMacAddress(unsigned char *mac) {
-  std::cout << std::hex;
-  for (int i = 0; i < 6; ++i) {
-    std::cout << (int)mac[i];
-    if (i < 5)
-      std::cout << ":";
-  }
-  std::cout << std::dec << std::endl;
-}
+
 
 int socketFd = -1;
 int packageN = 0;
