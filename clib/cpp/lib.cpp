@@ -1,12 +1,12 @@
-#include "Main.h"
+#include "org_example_FNETLib.h"
 
+#include <cerrno>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include <arpa/inet.h>
-#include <iostream>
 #include <jni.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -15,19 +15,16 @@
 
 #include <arpa/inet.h>
 #include <cstring>
-#include <iostream>
 #include <netinet/ip.h>
 #include <unistd.h>
 
 #include <netinet/ether.h> // For Ethernet header
 
-
-
 int socketFd = -1;
 int packageN = 0;
 
-JNIEXPORT jboolean JNICALL Java_Main_init(JNIEnv *env, jclass,
-                                          jstring jInterfaceName) {
+JNIEXPORT jboolean JNICALL
+Java_org_example_FNETLib_init(JNIEnv *env, jclass, jstring jInterfaceName) {
 
   const char *INTERFACE_NAME = env->GetStringUTFChars(jInterfaceName, nullptr);
   // socketFd =
@@ -48,13 +45,42 @@ JNIEXPORT jboolean JNICALL Java_Main_init(JNIEnv *env, jclass,
   return socketFd > 0;
 }
 
-JNIEXPORT void JNICALL Java_Main_deinit(JNIEnv *, jclass) { close(socketFd); }
-
-JNIEXPORT jint JNICALL Java_Main_sendTo(JNIEnv *, jclass, jbyteArray) {
-  return 0;
+JNIEXPORT void JNICALL Java_org_example_FNETLib_deinit(JNIEnv *, jclass) {
+  close(socketFd);
 }
 
-JNIEXPORT jbyteArray JNICALL Java_Main_recvFrame(JNIEnv *env, jclass) {
+JNIEXPORT jint JNICALL Java_org_example_FNETLib_sendTo(JNIEnv *env, jclass,
+                                                       jbyteArray array) {
+
+  printf("Я в сии\n");
+  // if (array == NULL) {
+  //   return -1; // Возвращаем ошибку
+  // }
+
+  // Получаем длину массива
+  jsize length = (*env).GetArrayLength(array);
+  if (length == 0)
+    return 0; // Нет данных для отправки
+
+  // Получаем указатель на элементы массива
+  jbyte *data = (*env).GetByteArrayElements(array, NULL);
+
+  // Отправляем данные через сокет
+  ssize_t sentBytes = send(socketFd, data, length, 0);
+
+  if (sentBytes < 0)
+    printf("Error sending data: %s\n", strerror(errno));
+
+  // Освобождаем ресурсы
+  (*env).ReleaseByteArrayElements(
+      array, data, JNI_ABORT); // JNI_ABORT говорит JVM не копировать измененные
+                               // данные обратно в array
+
+  return (jint)sentBytes; // Возвращаем количество отправл
+}
+
+JNIEXPORT jbyteArray JNICALL Java_org_example_FNETLib_recvFrame(JNIEnv *env,
+                                                                jclass) {
 
   jbyteArray byteArray;
   unsigned char buffer[65536]; // Буфер для получения пакетов
