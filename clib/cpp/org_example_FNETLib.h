@@ -7,35 +7,16 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/*
- * Class:     org_example_FNETLib
- * Method:    init
- * Signature: (Ljava/lang/String;)Z
- */
+
 JNIEXPORT jboolean JNICALL Java_org_example_FNETLib_init
   (JNIEnv *, jclass, jstring);
 
-/*
- * Class:     org_example_FNETLib
- * Method:    deinit
- * Signature: ()V
- */
 JNIEXPORT void JNICALL Java_org_example_FNETLib_deinit
   (JNIEnv *, jclass);
 
-/*
- * Class:     org_example_FNETLib
- * Method:    sendTo
- * Signature: ([B)I
- */
 JNIEXPORT jint JNICALL Java_org_example_FNETLib_sendTo
   (JNIEnv *, jclass, jbyteArray);
 
-/*
- * Class:     org_example_FNETLib
- * Method:    recvFrame
- * Signature: ()[B
- */
 JNIEXPORT jbyteArray JNICALL Java_org_example_FNETLib_recvFrame
   (JNIEnv *, jclass);
 

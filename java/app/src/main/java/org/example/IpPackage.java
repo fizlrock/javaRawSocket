@@ -2,6 +2,8 @@ package org.example;
 
 import static java.util.Arrays.copyOfRange;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import lombok.Getter;
 import lombok.ToString;
 
@@ -23,12 +25,8 @@ public class IpPackage implements Bytes {
     WESP, ROHC
   }
 
-  static String getIp(byte[] ip) {
-    return String.format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-  }
-
   // final EthernetFrame eth;
-  final String srcIP, dstIP;
+  final IpAddress srcIP, dstIP;
 
   final int ttl, header_length;
   final IP_NESTED_PROTOCOLS type;
@@ -49,16 +47,18 @@ public class IpPackage implements Bytes {
 
     data = payload;
     header_length = 4 * (int) (payload[0] & 0x0F);
+    // header_length = 20;
     ttl = payload[8];
 
     type = IP_NESTED_PROTOCOLS.values()[payload[9]];
 
-    dstIP = getIp(copyOfRange(payload, 12, 16));
-    srcIP = getIp(copyOfRange(payload, 16, 20));
+    dstIP = IpAddress.build(copyOfRange(payload, 12, 16));
+    srcIP = IpAddress.build(copyOfRange(payload, 16, 20));
     this.payload = copyOfRange(payload, header_length, payload.length);
+
   }
 
-  public static IpPackage from(byte[] dstIp, byte[] srcIp, UdpPackage pack) {
+  public static IpPackage from(IpAddress dstIp, IpAddress srcIp, UdpDatagram pack) {
 
     byte[] udp_bytes = pack.toBytes();
 
@@ -74,12 +74,12 @@ public class IpPackage implements Bytes {
     result[1] = 0b00000000; // DSF
 
     int total_length = result.length;
-    result[2] = (byte) (total_length & 0xFF);
-    result[3] = (byte) ((total_length >> 8) & 0xFF);
+    result[2] = (byte) (total_length >> 24);
+    result[3] = (byte) (total_length >> 16);
 
-    // Package ID TODO
-    result[4] = (byte) ((total_length >> 8) & 0xFF);
-    result[5] = (byte) ((total_length >> 8) & 0xFF);
+    // Package ID
+    result[4] = (byte) ThreadLocalRandom.current().nextInt();
+    result[5] = (byte) ThreadLocalRandom.current().nextInt();
 
     result[6] = 0b01000000;
     result[7] = 0x00000000;
@@ -90,23 +90,40 @@ public class IpPackage implements Bytes {
     // UDP flag
     result[9] = (byte) IP_NESTED_PROTOCOLS.UDP.ordinal();
 
-    // Checksum see https://www.ietf.org/rfc/rfc1071.txt
+    byte[] srcIpBytes = srcIp.toBytes();
+    result[12] = srcIpBytes[0];
+    result[13] = srcIpBytes[1];
+    result[14] = srcIpBytes[2];
+    result[15] = srcIpBytes[3];
+
+    byte[] dstIpBytes = dstIp.toBytes();
+    result[16] = dstIpBytes[0];
+    result[17] = dstIpBytes[1];
+    result[18] = dstIpBytes[2];
+    result[19] = dstIpBytes[3];
+
+    // Checksum. See https://www.ietf.org/rfc/rfc1071.txt
     // TODO
-    result[10] = 64;
-    result[11] = 64;
-
-    result[12] = srcIp[0];
-    result[13] = srcIp[1];
-    result[14] = srcIp[2];
-    result[15] = srcIp[3];
-
-    result[16] = dstIp[0];
-    result[17] = dstIp[1];
-    result[18] = dstIp[2];
-    result[19] = dstIp[3];
+    long cs = checksum(result, 20);
+    result[10] = (byte) (cs >> 8);
+    result[11] = (byte) cs;
 
     return new IpPackage(result);
   };
+
+  public static long checksum(byte[] buf, int length) {
+    int i = 0;
+    long sum = 0;
+    while (length > 0) {
+      sum += (buf[i++] & 0xff) << 8;
+      if ((--length) == 0)
+        break;
+      sum += (buf[i++] & 0xff);
+      --length;
+    }
+
+    return (~((sum & 0xFFFF) + (sum >> 16))) & 0xFFFF;
+  }
 
   @Override
   public byte[] toBytes() {

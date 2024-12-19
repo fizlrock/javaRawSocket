@@ -9,10 +9,9 @@ import java.util.HexFormat;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import org.example.IpPackage.IP_NESTED_PROTOCOLS;
+
 public class App {
-  public String getGreeting() {
-    return "Hello World!";
-  }
 
   static String copyAndToHex(byte[] data, int s, int e) {
 
@@ -24,43 +23,59 @@ public class App {
   public static void main(String[] args) {
     if (!FNETLib.init("lo"))
       System.exit(-123);
-
-    byte[] srcIp = { 0x0, 0x0, 0x0, 0x0 };
-    byte[] dstIp = { 0x0, 0x0, 0x0, 0x0 };
-    byte[] srcMac = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    byte[] dstMac = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    int srcPort = 123;
-    int dstPort = 321;
-
-    var udp = new UdpPackage(srcPort, dstPort, "Hey from raw socket".getBytes());
-
-    var ip = IpPackage.from(dstIp, srcIp, udp);
-
-    var frame = new EthernetFrame("000000000000", "000000000000", ip);
-
-    var bytes = frame.toBytes();
-
-    System.out.println(HexFormat.of().formatHex(bytes));
-    int send_result = FNETLib.sendTo(bytes);
-    System.out.println(send_result);
+    listen();
 
   }
 
+public static void send() {
+
+  int srcPort = 123;
+  int dstPort = 321;
+  IpAddress srcIp = IpAddress.build("1.1.1.1");
+  IpAddress dstIp = IpAddress.build("1.1.1.1");
+
+  var udp = new UdpDatagram(srcPort, dstPort, srcIp, dstIp, "Михайлов Андрей".getBytes());
+
+  var ip = IpPackage.from(dstIp, srcIp, udp);
+
+  var frame = new EthernetFrame("000000000000", "000000000000", ip);
+
+  var bytes = frame.toBytes();
+
+  System.out.println(HexFormat.of().formatHex(bytes));
+  int send_result = FNETLib.sendTo(bytes);
+  System.out.println(send_result);
+}
+
   public static void listen() {
+
+    final int port = 234;
+    IpAddress srcIp = IpAddress.build("127.0.0.1");
+
+    RequestContext ctx = new RequestContext();
 
     Stream.generate(FNETLib::recvFrame)
         .map(EthernetFrame::new)
         .filter(f -> f.dstMacHex.equals("000000000000"))
         .filter(f -> f.typeHex.equals("0800"))
         .map(IpPackage::new)
-        .filter(p -> p.type.equals("UDP"))
-        // .peek(System.out::println)
-        .map(UdpPackage::new)
-        .filter(u -> u.dstPort == 43521)
-        .map(UdpPackage::getPayload)
+        .filter(p -> p.type == IP_NESTED_PROTOCOLS.UDP)
+        .peek(p -> ctx.addr = p.srcIP)
+        .map(UdpDatagram::new)
+        .filter(u -> u.dstPort == port)
+        .peek(p -> ctx.port = p.srcPort)
+        .map(UdpDatagram::getPayload)
         .map(String::new)
-        .limit(100)
-        .forEach(System.out::println);
+        .map(String::toUpperCase)
+        .map(text -> new UdpDatagram(port, ctx.port, srcIp, ctx.addr, text.getBytes()))
+        .map(dg -> new IpPackage(dg.toBytes()))
+        .map(p -> new EthernetFrame("0000000000", "0000000000", p))
+        .forEach(f -> FNETLib.sendTo(f.toBytes()));
+  }
+
+  static class RequestContext {
+    public IpAddress addr;
+    public int port;
   }
 
 }

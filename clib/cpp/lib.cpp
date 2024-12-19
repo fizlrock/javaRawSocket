@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <net/if.h>
+
 #include <arpa/inet.h>
 #include <jni.h>
 #include <netinet/in.h>
@@ -18,30 +20,51 @@
 #include <netinet/ip.h>
 #include <unistd.h>
 
-#include <netinet/ether.h> // For Ethernet header
+#include <linux/if_packet.h> // struct sockaddr_ll (see man 7 packet)
+#include <netinet/ether.h>   // For Ethernet header
 
 int socketFd = -1;
 int packageN = 0;
+
+// Используется для привязки сокета к конкретному сетевому интерфейсу и для
+// задания параметров адресации при отправке и получении кадров.
+struct sockaddr_ll socketConfig;
 
 JNIEXPORT jboolean JNICALL
 Java_org_example_FNETLib_init(JNIEnv *env, jclass, jstring jInterfaceName) {
 
   const char *INTERFACE_NAME = env->GetStringUTFChars(jInterfaceName, nullptr);
-  // socketFd =
-  //     socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); // Пример для протокола ICMP
+  uint interface_index = if_nametoindex(INTERFACE_NAME);
+
+  // Инициализация сокета
 
   socketFd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 
-  if (socketFd < 0)
+  if (socketFd < 0) {
     perror("Ошибка создания сокета");
-
-  // Шаг 2: Привязываем сокет к интерфейсу через SO_BINDTODEVICE
-  if (setsockopt(socketFd, SOL_SOCKET, SO_BINDTODEVICE, INTERFACE_NAME,
-
-                 strlen(INTERFACE_NAME)) < 0) {
-    perror("Ошибка привязки к интерфейсу");
-    close(socketFd);
+    return false;
   }
+
+  // Инициализация sockaddr_ll
+  memset(&socketConfig, 0, sizeof(socketConfig));
+
+  // Семейство адресов. Работаем на сетевом уровне
+  socketConfig.sll_family = AF_PACKET;
+  // Длина адреса
+  socketConfig.sll_halen = 6;
+  // Индекс сетевого интерфейса
+  socketConfig.sll_ifindex = interface_index;
+  // Получаем все пакеты. Записываем в big-endian формате
+  socketConfig.sll_protocol = htons(ETH_P_ALL);
+
+  socketConfig.sll_pkttype = PACKET_HOST; // Получаем пакеты предназначенные для хоста
+  socketConfig.sll_hatype = ARPHRD_LOOPBACK; // Тип адреса - loopback
+
+  // socketConfig.sll_addr заполнен нулями
+
+  int result =
+      bind(socketFd, (struct sockaddr *)&socketConfig, sizeof(socketConfig));
+
   return socketFd > 0;
 }
 
